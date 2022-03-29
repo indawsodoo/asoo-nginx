@@ -306,6 +306,16 @@ server {
 	{{ end }}
 
 	location / {
+                proxy_request_buffering off;
+                proxy_buffering off;
+
+                proxy_busy_buffers_size 2048k;
+                proxy_temp_file_write_size 2048k;
+                proxy_max_temp_file_size 0;
+
+                proxy_buffer_size 1024k;
+                proxy_buffers 16 1024k;
+
 		{{ if eq $proto "uwsgi" }}
 		include uwsgi_params;
 		uwsgi_pass {{ trim $proto }}://{{ trim $upstream_name }};
