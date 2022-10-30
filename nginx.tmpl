@@ -57,7 +57,6 @@ gzip_comp_level    5;
 gzip_min_length    256;
 gzip_proxied       any;
 gzip_vary          on;
-gzip_disable "MSIE [1-6]\.";
 
 gzip_types
 application/atom+xml
@@ -94,13 +93,7 @@ log_format vhost '$host $remote_addr - $remote_user [$time_local] '
 access_log off;
 
 # Others optimizations
-worker_processes = 2
-events {
-    worker_connections 1024;
-    use epoll;
-    multi_accept on;
-}
-keepalive_timeout 86400;
+keepalive_timeout 864000;
 keepalive_requests 100000;
 sendfile on;
 tcp_nopush on;
