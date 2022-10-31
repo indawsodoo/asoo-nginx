@@ -307,6 +307,9 @@ server {
 	include /etc/nginx/network_internal.conf;
 	{{ end }}
 
+    # Perfomance and other parameters
+    client_max_body_size 0;
+
 	{{ template "ssl_policy" (dict "ssl_policy" $ssl_policy) }}
 
 	ssl_session_timeout 5m;
@@ -347,6 +350,8 @@ server {
 		{{ else if eq $proto "grpc" }}
 		grpc_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ else }}
+		proxy_buffering	on;
+		proxy_max_temp_file_size 4096M;
 		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ end }}
 
