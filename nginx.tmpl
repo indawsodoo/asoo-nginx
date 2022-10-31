@@ -124,7 +124,8 @@ include /etc/nginx/proxy.conf;
 {{ else }}
 # HTTP 1.1 support
 proxy_http_version 1.1;
-proxy_buffering off;
+proxy_buffering on;
+proxy_max_temp_file_size 4096M;
 proxy_set_header Host $http_host;
 proxy_set_header Upgrade $http_upgrade;
 proxy_set_header Connection $proxy_connection;
@@ -137,6 +138,9 @@ proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
 # Mitigate httpoxy attack (see README for details)
 proxy_set_header Proxy "";
 {{ end }}
+
+# Perfomance and other parameters
+client_max_body_size 0;
 
 {{ $access_log := (or (and (not $.Env.DISABLE_ACCESS_LOGS) "access_log /var/log/nginx/access.log vhost;") "") }}
 
