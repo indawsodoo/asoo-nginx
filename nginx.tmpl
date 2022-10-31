@@ -21,14 +21,14 @@
 # scheme used to connect to this server
 map $http_x_forwarded_proto $proxy_x_forwarded_proto {
   default $http_x_forwarded_proto;
-  ''      $scheme;
+  ''	  $scheme;
 }
 
 # If we receive X-Forwarded-Port, pass it through; otherwise, pass along the
 # server port the client connected to
 map $http_x_forwarded_port $proxy_x_forwarded_port {
   default $http_x_forwarded_port;
-  ''      $server_port;
+  ''	  $server_port;
 }
 
 # If we receive Upgrade, set Connection to "upgrade"; otherwise, delete any
@@ -53,10 +53,10 @@ map $scheme $proxy_x_forwarded_ssl {
 }
 
 gzip on;
-gzip_comp_level    5;
-gzip_min_length    256;
-gzip_proxied       any;
-gzip_vary          on;
+gzip_comp_level	5;
+gzip_min_length	256;
+gzip_proxied	   any;
+gzip_vary		  on;
 
 gzip_types
 application/atom+xml
@@ -87,8 +87,8 @@ text/x-cross-domain-policy;
 # text/html is always compressed by gzip module
 
 log_format vhost '$host $remote_addr - $remote_user [$time_local] '
-                 '"$request" $status $body_bytes_sent '
-                 '"$http_referer" "$http_user_agent"';
+				 '"$request" $status $body_bytes_sent '
+				 '"$http_referer" "$http_user_agent"';
 
 access_log off;
 
@@ -266,11 +266,11 @@ server {
 	proxy_connect_timeout 86400s;
 	proxy_send_timeout 86400s;
 
-    # Add Headers for odoo proxy mode
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Real-IP $remote_addr;
+	# Add Headers for odoo proxy mode
+	proxy_set_header X-Forwarded-Host $host;
+	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	proxy_set_header X-Forwarded-Proto $scheme;
+	proxy_set_header X-Real-IP $remote_addr;
 
 	# Others parameters
 	client_max_body_size 20480m; # 20GB
@@ -280,13 +280,19 @@ server {
 	include /etc/nginx/network_internal.conf;
 	{{ end }}
 
-	ssl_protocols TLSv1.2 TLSv1.3;
-	ssl_ciphers TLS13-CHACHA20-POLY1305-SHA256:TLS13-AES-256-GCM-SHA384:TLS13-AES-128-GCM-SHA256:EECDH+CHACHA20:EECDH+AESGCM:EECDH+AES;
+	ssl_protocols TLSv1.3 TLSv1.2;
 	ssl_prefer_server_ciphers on;
+	ssl_ecdh_curve secp521r1:secp384r1;
+	ssl_ciphers EECDH+AESGCM:EECDH+AES256;
 
 	ssl_session_timeout 30m;
-	ssl_session_cache shared:SSL:50m;
-	ssl_session_tickets off;
+	ssl_session_cache shared:TLS:2m;
+	ssl_buffer_size 4k;
+
+	# OCSP stapling
+	ssl_stapling on;
+	ssl_stapling_verify on;
+	resolver 1.1.1.1 1.0.0.1 [2606:4700:4700::1111] [2606:4700:4700::1001]; # Cloudflare
 
 	ssl_certificate /etc/nginx/certs/{{ (printf "%s.crt" $cert) }};
 	ssl_certificate_key /etc/nginx/certs/{{ (printf "%s.key" $cert) }};
@@ -321,12 +327,12 @@ server {
 		fastcgi_pass {{ trim $upstream_name }};
 		{{ else }}
 		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $proxy_connection;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection $proxy_connection;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Real-IP $remote_addr;
 		{{ end }}
 
 		{{ if (exists (printf "/etc/nginx/htpasswd/%s" $host)) }}
@@ -341,16 +347,16 @@ server {
 	}
 
 	location /longpolling {
-        proxy_pass {{ trim $proto }}://longpolling-{{ trim $upstream_name }};
+		proxy_pass {{ trim $proto }}://longpolling-{{ trim $upstream_name }};
 
-    }
+	}
 
-    location ^~ /[\/]+/static/ {
-        proxy_cache_valid 200 60m;
-        proxy_buffering    on;
-        expires 864000;
-        proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
-    }
+	location ^~ /[\/]+/static/ {
+		proxy_cache_valid 200 60m;
+		proxy_buffering	on;
+		expires 864000;
+		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
+	}
 }
 
 {{ end }}
