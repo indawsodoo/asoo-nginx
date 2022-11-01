@@ -71,5 +71,5 @@ services:
 networks:
   default:
     external: true
-    name: ${NETWORK:-proxy}
+    name: ${NETWORK:-nginx-net}
 
