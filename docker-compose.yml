@@ -8,10 +8,12 @@ services:
     container_name: ${NGINX_WEB_SEVICE_NAME:-nginx-proxy-automation-web}
     restart: always
     ports:
-      - "${IPv4:-0.0.0.0}:${DOCKER_HTTP_:-80}:80"
-      - "${IPv4:-0.0.0.0}:${DOCKER_HTTPS:-443}:443"
-#      - "${IPv6:-::0}:${DOCKER_HTTP_:-80}:80"
-#      - "${IPv6:-::0}:${DOCKER_HTTPS:-443}:443"
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
     environment:
       SSL_POLICY: ${SSL_POLICY:-Mozilla-Intermediate}
 #      DEFAULT_HOST: ${DEFAULT_HOST}
