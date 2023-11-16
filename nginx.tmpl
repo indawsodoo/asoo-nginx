@@ -207,7 +207,7 @@ upstream {{ $upstream_name }} {
 }
 
 # {{ $host }}
-upstream longpolling-{{ $upstream_name }} {
+upstream odoochat-{{ $upstream_name }} {
 
 {{ range $container := $containers }}
 	{{ $addrLen := len $container.Addresses }}
@@ -377,10 +377,17 @@ server {
 		{{ else if (exists "/etc/nginx/vhost.d/default_location") }}
 		include /etc/nginx/vhost.d/default_location;
 		{{ end }}
+        proxy_cookie_flags session_id samesite=lax secure;
 	}
 
+    # Odoo <= 15.0
 	location /longpolling {
-		proxy_pass {{ trim $proto }}://longpolling-{{ trim $upstream_name }};
+		proxy_pass {{ trim $proto }}://odoochat-{{ trim $upstream_name }};
+	}
+
+    # Odoo >= 16.0
+	location /websocket {
+		proxy_pass {{ trim $proto }}://odoochat-{{ trim $upstream_name }};
 	}
 
 	location ^~ /[\/]+/static/ {
