@@ -103,6 +103,8 @@ map $scheme $proxy_x_forwarded_ssl {
   https on;
 }
 
+gzip_types text/plain text/css application/javascript application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
+
 log_format vhost '$host $remote_addr - $remote_user [$time_local] '
                  '"$request" $status $body_bytes_sent '
                  '"$http_referer" "$http_user_agent"';
@@ -122,8 +124,7 @@ include /etc/nginx/proxy.conf;
 {{ else }}
 # HTTP 1.1 support
 proxy_http_version 1.1;
-proxy_buffering on;
-proxy_max_temp_file_size 4096M;
+proxy_buffering off;
 proxy_set_header Host $http_host;
 proxy_set_header Upgrade $http_upgrade;
 proxy_set_header Connection $proxy_connection;
@@ -136,9 +137,6 @@ proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
 # Mitigate httpoxy attack (see README for details)
 proxy_set_header Proxy "";
 {{ end }}
-
-# Perfomance and other parameters
-client_max_body_size 0;
 
 {{ $access_log := (or (and (not $.Env.DISABLE_ACCESS_LOGS) "access_log /var/log/nginx/access.log vhost;") "") }}
 
@@ -156,9 +154,9 @@ server {
 {{ if (and (exists "/etc/nginx/certs/default.crt") (exists "/etc/nginx/certs/default.key")) }}
 server {
 	server_name _; # This is just an invalid value which will never trigger on a real hostname.
-	listen {{ $external_https_port }} ssl;
+	listen {{ $external_https_port }} ssl http2;
 	{{ if $enable_ipv6 }}
-	listen [::]:{{ $external_https_port }} ssl;
+	listen [::]:{{ $external_https_port }} ssl http2;
 	{{ end }}
 	{{ $access_log }}
 	return 503;
@@ -207,7 +205,7 @@ upstream {{ $upstream_name }} {
 }
 
 # {{ $host }}
-upstream odoochat-{{ $upstream_name }} {
+upstream longpolling-{{ $upstream_name }} {
 
 {{ range $container := $containers }}
 	{{ $addrLen := len $container.Addresses }}
@@ -215,7 +213,7 @@ upstream odoochat-{{ $upstream_name }} {
 	{{ range $knownNetwork := $CurrentContainer.Networks }}
 		{{ range $containerNetwork := $container.Networks }}
 			{{ if (and (ne $containerNetwork.Name "ingress") (or (eq $knownNetwork.Name $containerNetwork.Name) (eq $knownNetwork.Name "host"))) }}
-				## Can be connect with "{{ $containerNetwork.Name }}" network
+				## Can be connected with "{{ $containerNetwork.Name }}" network
 
 				{{/* If only 1 port exposed, use that */}}
 				{{ if eq $addrLen 1 }}
@@ -223,10 +221,13 @@ upstream odoochat-{{ $upstream_name }} {
 					{{ template "upstream" (dict "Container" $container "Address" $address "Network" $containerNetwork) }}
 				{{/* If more than one port exposed, use the one matching VIRTUAL_PORT env var, falling back to standard web port 80 */}}
 				{{ else }}
-					{{ $port := "8072" }}
+					{{ $port := coalesce $container.Env.VIRTUAL_PORT "8072" }}
 					{{ $address := where $container.Addresses "Port" $port | first }}
 					{{ template "upstream" (dict "Container" $container "Address" $address "Network" $containerNetwork) }}
 				{{ end }}
+			{{ else }}
+				# Cannot connect to network of this container
+				server 127.0.0.1 down;
 			{{ end }}
 		{{ end }}
 	{{ end }}
@@ -298,9 +299,9 @@ server {
 
 server {
 	server_name {{ $host }};
-	listen {{ $external_https_port }} ssl {{ $default_server }};
+	listen {{ $external_https_port }} ssl http2 {{ $default_server }};
 	{{ if $enable_ipv6 }}
-	listen [::]:{{ $external_https_port }} ssl {{ $default_server }};
+	listen [::]:{{ $external_https_port }} ssl http2 {{ $default_server }};
 	{{ end }}
 	{{ $access_log }}
 
@@ -316,12 +317,6 @@ server {
 
 	# Perfomance and other parameters
 	client_max_body_size 0;
-
-	# Add Headers for odoo proxy mode
-	proxy_set_header X-Forwarded-Host $host;
-	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-	proxy_set_header X-Forwarded-Proto $scheme;
-	proxy_set_header X-Real-IP $remote_addr;
 
 	{{ template "ssl_policy" (dict "ssl_policy" $ssl_policy) }}
 
@@ -353,7 +348,6 @@ server {
 	{{ end }}
 
 	location / {
-		proxy_redirect off;
 		{{ if eq $proto "uwsgi" }}
 		include uwsgi_params;
 		uwsgi_pass {{ trim $proto }}://{{ trim $upstream_name }};
@@ -364,6 +358,7 @@ server {
 		{{ else if eq $proto "grpc" }}
 		grpc_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ else }}
+        proxy_buffering	on;
 		proxy_max_temp_file_size 4096M;
 		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ end }}
@@ -377,20 +372,10 @@ server {
 		{{ else if (exists "/etc/nginx/vhost.d/default_location") }}
 		include /etc/nginx/vhost.d/default_location;
 		{{ end }}
-        proxy_cookie_flags session_id samesite=lax secure;
 	}
 
-	# Odoo <= 15.0
 	location /longpolling {
-		proxy_pass {{ trim $proto }}://odoochat-{{ trim $upstream_name }};
-	}
-
-	# Odoo >= 16.0
-	location /websocket {
-		proxy_redirect off;
-		proxy_pass {{ trim $proto }}://odoochat-{{ trim $upstream_name }};
-		proxy_set_header Upgrade $http_upgrade;
-		proxy_set_header Connection "upgrade";
+		proxy_pass {{ trim $proto }}://longpolling-{{ trim $upstream_name }};
 	}
 
 	location ^~ /[\/]+/static/ {
@@ -455,9 +440,9 @@ server {
 {{ if (and (not $is_https) (exists "/etc/nginx/certs/default.crt") (exists "/etc/nginx/certs/default.key")) }}
 server {
 	server_name {{ $host }};
-	listen {{ $external_https_port }} ssl {{ $default_server }};
+	listen {{ $external_https_port }} ssl http2 {{ $default_server }};
 	{{ if $enable_ipv6 }}
-	listen [::]:{{ $external_https_port }} ssl {{ $default_server }};
+	listen [::]:{{ $external_https_port }} ssl http2 {{ $default_server }};
 	{{ end }}
 	{{ $access_log }}
 	return 500;

@@ -1,5 +1,7 @@
 data
-!.env*
+.env*
 !.env.sample
 .DS_Store
 .idea/
+/bin/basescript.log
+/docker-compose.yml.*
