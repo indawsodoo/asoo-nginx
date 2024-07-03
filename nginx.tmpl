@@ -103,8 +103,6 @@ map $scheme $proxy_x_forwarded_ssl {
   https on;
 }
 
-gzip_types text/plain text/css application/javascript application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
-
 log_format vhost '$host $remote_addr - $remote_user [$time_local] '
                  '"$request" $status $body_bytes_sent '
                  '"$http_referer" "$http_user_agent"';
@@ -138,6 +136,10 @@ proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
 # Mitigate httpoxy attack (see README for details)
 proxy_set_header Proxy "";
 {{ end }}
+
+# Perfomance and other parameters
+
+client_max_body_size 0;
 
 {{ $access_log := (or (and (not $.Env.DISABLE_ACCESS_LOGS) "access_log /var/log/nginx/access.log vhost;") "") }}
 
@@ -319,6 +321,12 @@ server {
 	# Perfomance and other parameters
 	client_max_body_size 0;
 
+	# Add Headers for odoo proxy mode
+	proxy_set_header X-Forwarded-Host $host;
+	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	proxy_set_header X-Forwarded-Proto $scheme;
+	proxy_set_header X-Real-IP $remote_addr;
+
 	{{ template "ssl_policy" (dict "ssl_policy" $ssl_policy) }}
 
 	ssl_session_timeout 5m;
@@ -349,6 +357,8 @@ server {
 	{{ end }}
 
 	location / {
+		proxy_redirect off;
+
 		{{ if eq $proto "uwsgi" }}
 		include uwsgi_params;
 		uwsgi_pass {{ trim $proto }}://{{ trim $upstream_name }};
@@ -359,7 +369,6 @@ server {
 		{{ else if eq $proto "grpc" }}
 		grpc_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ else }}
-		proxy_buffering	on;
 		proxy_max_temp_file_size 4096M;
 		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
 		{{ end }}
@@ -373,6 +382,7 @@ server {
 		{{ else if (exists "/etc/nginx/vhost.d/default_location") }}
 		include /etc/nginx/vhost.d/default_location;
 		{{ end }}
+		proxy_cookie_flags session_id samesite=lax secure;
 	}
 
 	# Odoo <= 15.0
