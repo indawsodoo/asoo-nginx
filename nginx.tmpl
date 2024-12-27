@@ -358,6 +358,8 @@ server {
 
 	location / {
 		proxy_redirect off;
+        proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
 
 		{{ if eq $proto "uwsgi" }}
 		include uwsgi_params;
