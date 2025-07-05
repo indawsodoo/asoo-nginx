@@ -409,6 +409,52 @@ server {
 		proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
 	}
 
+    # Allowed locations by IP Address
+    {{ $ruleGroups := or (first (groupByKeys $containers "Env.RULE_GROUPS")) "" }}
+
+    {{ if $ruleGroups }}
+        {{ range $groupName := split $ruleGroups "," }}
+            {{ $urlsVarName := printf "PROTECTED_URLS_%s" $groupName }}
+            {{ $ipsVarName := printf "ALLOWED_IPS_%s" $groupName }}
+
+            {{ $protectedUrls := or (first (groupByKeys $containers (printf "Env.%s" $urlsVarName))) "" }}
+            {{ $allowedIps := or (first (groupByKeys $containers (printf "Env.%s" $ipsVarName))) "" }}
+
+            {{ if $protectedUrls }}
+                {{/* Si hay URLs protegidas para este grupo, itera sobre ellas */}}
+                {{ range $urlRegex := split $protectedUrls "," }}
+    location ~ {{ $urlRegex }} {
+        {{ if $allowedIps }}
+            {{/* Si hay IPs permitidas para este grupo, itera sobre ellas */}}
+            {{ range $ip := split $allowedIps "," }}
+        allow {{ $ip }};
+            {{ end }}
+        {{ else }}
+        deny all; # Si no hay IPs definidas para este grupo, deniega todo
+        {{ end }}
+        deny all; # Deniega explícitamente cualquier IP no permitida por 'allow'
+        # Proxy al contenedor Odoo específico para este VIRTUAL_HOST
+        proxy_pass {{ trim $proto }}://{{ trim $upstream_name }};
+        proxy_redirect off;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $proxy_connection;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+                {{ end }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+
+    # Deny Silent
+    location = /deny-silent {
+        internal;
+        return 444;
+    }
+    error_page 403 /deny-silent;
+
 	gzip_types text/plain text/css application/javascript application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
 	gzip on;
 }
