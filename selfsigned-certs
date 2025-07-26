@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Directory where the certificates will be saved
+CERT_DIR="data/certs"
+
+echo "--- Generate Self-Signed Certificates ---"
+echo ""
+
+# Ask the user for a base name for the certificate files
+read -p "Enter a base name for your certificate files (e.g. 'my-site'): " FILE_BASE_NAME
+
+# Validate that a name was entered
+if [ -z "$FILE_BASE_NAME" ]; then
+    echo "Error: No name entered. Exiting."
+    exit 1
+fi
+
+# Full paths to the files
+KEY_FILE="$CERT_DIR/$FILE_BASE_NAME.key"
+CRT_FILE="$CERT_DIR/$FILE_BASE_NAME.crt"
+
+echo ""
+echo "The following files will be generated:"
+echo "Private key: $KEY_FILE"
+echo "Certificate: $CRT_FILE"
+echo ""
+
+# Create the directory if it doesn't exist
+mkdir -p "$CERT_DIR"
+
+# Generate the private key and self-signed certificate
+# Non-interactive options are used to facilitate the execution of the script.
+# You will be asked for information for the certificate.
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "$KEY_FILE" \
+    -out "$CRT_FILE"
+
+# Verify if the generation was successful
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "Certificate and key generated successfully!"
+    echo "Files saved in: $(realpath "$CERT_DIR")"
+else
+    echo ""
+    echo "Error generating certificate and key. Check previous messages."
+    exit 1
+fi
+
+echo ""
+echo "--- Process completed ---"
+
